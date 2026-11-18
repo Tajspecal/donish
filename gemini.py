@@ -44,7 +44,7 @@ RESPONSE_SCHEMA = {
 }
 
 DIFFICULTY = {"easy": "лёгкий (базовые понятия)", "medium": "средний", "hard": "сложный (требует понимания, а не заучивания)"}
-LANGUAGE = {"ru": "русском", "en": "английском"}
+LANGUAGE = {"ru": "русском", "en": "английском", "tj": "таджикском"}
 
 
 def build_prompt(topic, count, options, difficulty, language):
