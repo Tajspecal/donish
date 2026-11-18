@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дониш — платформа онлайн-тестирования</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header class="header" id="app-header" hidden>
+    <div class="container header__inner">
+        <a href="#" class="logo" data-nav="home">
+            <span class="logo__icon">✓</span> Дониш
+        </a>
+        <nav class="nav">
+            <a href="#" class="nav__link is-active" data-nav="home">Тесты</a>
+            <a href="#" class="nav__link" data-nav="history">Мои результаты</a>
+            <a href="#" class="nav__link" data-nav="admin" id="nav-admin" hidden>Панель</a>
+            <span class="nav__user">
+                <span class="nav__avatar" id="user-avatar">?</span>
+                <span id="user-name"></span>
+            </span>
+            <button class="btn btn--secondary btn--small" id="btn-logout">Выйти</button>
+        </nav>
+    </div>
+</header>
+
+<main class="container main">
+
+    <!-- ВХОД / РЕГИСТРАЦИЯ -->
+    <section id="view-auth" class="view">
+        <div class="auth">
+            <div class="auth__brand">
+                <span class="logo__icon logo__icon--big">✓</span>
+                <h1>Дониш</h1>
+                <p class="muted">Платформа онлайн-тестирования студентов</p>
+            </div>
+
+            <div class="card auth__card">
+                <div class="tabs">
+                    <button type="button" class="tabs__btn is-active" data-tab="login">Вход</button>
+                    <button type="button" class="tabs__btn" data-tab="register">Регистрация</button>
+                </div>
+
+                <div id="auth-error" class="alert" hidden></div>
+
+                <form id="form-login" class="form" autocomplete="on">
+                    <label class="field">
+                        <span>Логин</span>
+                        <input type="text" name="username" placeholder="Введите логин" autocomplete="username" required>
+                    </label>
+                    <label class="field">
+                        <span>Пароль</span>
+                        <input type="password" name="password" placeholder="Введите пароль" autocomplete="current-password" required>
+                    </label>
+                    <button type="submit" class="btn btn--primary btn--block">Войти</button>
+                    <p class="auth__switch muted">Нет аккаунта? <a href="#" data-tab-link="register">Зарегистрироваться</a></p>
+                </form>
+
+                <form id="form-register" class="form" autocomplete="on" hidden>
+                    <label class="field">
+                        <span>Логин</span>
+                        <input type="text" name="username" placeholder="Минимум 3 символа" autocomplete="username" minlength="3" maxlength="50" required>
+                    </label>
+                    <label class="field">
+                        <span>Email</span>
+                        <input type="email" name="email" placeholder="name@example.com" autocomplete="email" maxlength="100" required>
+                    </label>
+                    <label class="field">
+                        <span>Пароль</span>
+                        <input type="password" name="password" placeholder="Минимум 4 символа" autocomplete="new-password" minlength="4" required>
+                    </label>
+                    <label class="field">
+                        <span>Повторите пароль</span>
+                        <input type="password" name="password2" placeholder="Повторите пароль" autocomplete="new-password" minlength="4" required>
+                    </label>
+                    <button type="submit" class="btn btn--primary btn--block">Зарегистрироваться</button>
+                    <p class="auth__switch muted">Уже есть аккаунт? <a href="#" data-tab-link="login">Войти</a></p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ГЛАВНАЯ: список тестов -->
+    <section id="view-home" class="view" hidden>
+        <div class="hero">
+            <h1>Онлайн-тестирование студентов</h1>
+            <p>Выберите тест, ответьте на вопросы и сразу узнайте результат.</p>
+            <input id="search" class="search" type="search" placeholder="Поиск теста по названию...">
+        </div>
+        <div id="tests-grid" class="grid">
+            <div class="state-msg">Загрузка тестов...</div>
+        </div>
+    </section>
+
+    <!-- ПРОХОЖДЕНИЕ ТЕСТА -->
+    <section id="view-quiz" class="view" hidden>
+        <div class="quiz">
+            <div class="quiz__top">
+                <button class="btn btn--ghost" id="btn-exit">← Выйти из теста</button>
+                <span id="quiz-counter" class="quiz__counter"></span>
+            </div>
+            <h2 id="quiz-title" class="quiz__title"></h2>
+            <div class="progress"><div id="progress-bar" class="progress__bar"></div></div>
+
+            <div class="card question">
+                <p id="question-text" class="question__text"></p>
+                <div id="options" class="options"></div>
+            </div>
+
+            <div class="quiz__nav">
+                <button class="btn btn--secondary" id="btn-prev">Назад</button>
+                <button class="btn btn--primary" id="btn-next">Далее</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- РЕЗУЛЬТАТ -->
+    <section id="view-result" class="view" hidden>
+        <div class="card result">
+            <div class="result__icon">🎉</div>
+            <h2>Тест завершён!</h2>
+            <p id="result-title" class="muted"></p>
+            <div class="result__score"><span id="result-score">0</span></div>
+            <p class="muted">Ваш балл</p>
+            <div class="result__actions">
+                <button class="btn btn--primary" data-nav="home">К списку тестов</button>
+                <button class="btn btn--secondary" data-nav="history">Мои результаты</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ИСТОРИЯ -->
+    <section id="view-history" class="view" hidden>
+        <h1>Мои результаты</h1>
+        <div id="history-list" class="card history"></div>
+    </section>
+
+    <!-- ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ -->
+    <section id="view-admin" class="view" hidden>
+        <div class="admin__head">
+            <h1>Панель преподавателя</h1>
+            <div class="tabs tabs--inline" id="admin-tabs">
+                <button type="button" class="tabs__btn is-active" data-admin-tab="tests">Тесты</button>
+                <button type="button" class="tabs__btn" data-admin-tab="users" id="tab-users" hidden>Пользователи</button>
+            </div>
+        </div>
+
+        <div id="admin-notice" class="alert" hidden></div>
+
+        <div id="admin-tests">
+            <div class="toolbar">
+                <input id="admin-search" class="search search--small" type="search" placeholder="Поиск теста по названию...">
+                <div class="toolbar__actions">
+                    <button class="btn btn--primary" id="btn-new-test">+ Создать тест</button>
+                    <button class="btn btn--secondary" id="btn-import-file">Загрузить из файла</button>
+                    <button class="btn btn--accent" id="btn-open-generator">✨ Сгенерировать</button>
+                    <input type="file" id="import-file" accept=".json,application/json" hidden>
+                </div>
+            </div>
+
+            <form id="generator" class="card generator" hidden>
+                <h3>Генерация теста с помощью Gemini</h3>
+                <p class="muted">Модель подготовит черновик. В базу он попадёт только после того, как вы проверите вопросы и нажмёте «Сохранить».</p>
+                <div class="generator__grid">
+                    <label class="field generator__wide">
+                        <span>Тема</span>
+                        <input type="text" name="topic" placeholder="Например: Основы компьютерных сетей" minlength="3" maxlength="200" required>
+                    </label>
+                    <label class="field"><span>Число вопросов</span>
+                        <input type="number" name="count" value="5" min="1" max="20" required></label>
+                    <label class="field"><span>Вариантов ответа</span>
+                        <input type="number" name="options" value="4" min="2" max="6" required></label>
+                    <label class="field"><span>Сложность</span>
+                        <select name="difficulty">
+                            <option value="easy">Лёгкая</option>
+                            <option value="medium" selected>Средняя</option>
+                            <option value="hard">Сложная</option>
+                        </select></label>
+                    <label class="field"><span>Язык вопросов</span>
+                        <select name="language">
+                            <option value="ru" selected>Русский</option>
+                            <option value="en">Английский</option>
+                        </select></label>
+                </div>
+                <div class="generator__actions">
+                    <button type="submit" class="btn btn--accent" id="btn-generate">Сгенерировать</button>
+                    <button type="button" class="btn btn--secondary" id="btn-close-generator">Отмена</button>
+                    <span id="generator-status" class="muted"></span>
+                </div>
+            </form>
+
+            <div class="card table-card">
+                <div id="admin-tests-list"></div>
+            </div>
+        </div>
+
+        <div id="admin-users" hidden>
+            <div class="card table-card">
+                <div id="admin-users-list"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- РЕДАКТОР ТЕСТА -->
+    <section id="view-editor" class="view" hidden>
+        <button class="btn btn--ghost" id="btn-editor-back">← К панели</button>
+        <h1 id="editor-title">Новый тест</h1>
+        <div id="editor-notice" class="alert alert--info" hidden></div>
+        <div id="editor-error" class="alert" hidden></div>
+
+        <div class="card">
+            <div class="form">
+                <label class="field"><span>Название теста</span>
+                    <input type="text" id="editor-name" maxlength="200" placeholder="Название теста"></label>
+                <label class="field"><span>Описание</span>
+                    <input type="text" id="editor-desc" placeholder="Коротко о чём тест"></label>
+            </div>
+        </div>
+
+        <div id="editor-questions"></div>
+
+        <div class="editor__bar">
+            <button class="btn btn--secondary" id="btn-add-question">+ Добавить вопрос</button>
+            <div>
+                <button class="btn btn--secondary" id="btn-editor-cancel">Отмена</button>
+                <button class="btn btn--primary" id="btn-editor-save">Сохранить тест</button>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<footer class="footer">
+    <div class="container">© 2026 Дониш — платформа онлайн-тестирования</div>
+</footer>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>
