@@ -177,6 +177,7 @@ h1, h2, h3 { margin: 0 0 10px; }
 .admin__head h1 { margin: 0; }
 .tabs--inline { margin: 0; }
 .tabs--inline .tabs__btn { padding: 8px 18px; }
+.test-type-tabs { max-width: 480px; margin: 0 0 16px; }
 
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .toolbar__actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -222,6 +223,19 @@ h1, h2, h3 { margin: 0 0 10px; }
 .qcard { margin-top: 16px; }
 .qcard__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .qcard__head .btn { margin: 0; }
+.qcard__head-actions { display: flex; align-items: center; gap: 8px; }
+.qcard__type { padding: 7px 10px; }
+.matching-row { display: grid; grid-template-columns: 1fr auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 8px; }
+.matching-row__input { width: 100%; padding: 10px 12px; font-size: 15px; font-family: inherit; border: 1px solid var(--border); border-radius: 8px; outline: none; }
+.matching-row__input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15); }
+.matching-row__arrow { color: var(--muted); }
+.matching-row__del { margin: 0; }
+.matching-editor__add { margin: 4px 0 0; }
+.matching-answer { display: flex; flex-direction: column; gap: 10px; }
+.matching-answer__row { display: grid; grid-template-columns: minmax(120px, 1fr) auto minmax(160px, 1.4fr); align-items: center; gap: 10px; }
+.matching-answer__left { font-weight: 600; }
+.matching-answer__arrow { color: var(--muted); }
+.matching-answer__select { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; background: #fff; }
 .qcard__text {
     width: 100%; padding: 12px 14px; font-size: 16px; font-family: inherit; border: 1px solid var(--border);
     border-radius: 10px; resize: vertical; outline: none;
@@ -239,6 +253,12 @@ h1, h2, h3 { margin: 0 0 10px; }
 
 @media (max-width: 700px) {
     .generator__grid { grid-template-columns: 1fr 1fr; }
+    .qcard__head { align-items: flex-start; gap: 8px; }
+    .qcard__head-actions { flex-direction: column-reverse; align-items: flex-end; }
+    .matching-row { grid-template-columns: 1fr auto 1fr; }
+    .matching-row__del { grid-column: 3; justify-self: end; }
+    .matching-answer__row { grid-template-columns: 1fr; }
+    .matching-answer__arrow { display: none; }
     .table thead { display: none; }
     .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
     .table tr { padding: 10px 0; border-bottom: 1px solid var(--border); }

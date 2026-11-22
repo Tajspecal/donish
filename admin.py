@@ -44,9 +44,9 @@ def _create_test(data, source):
         return jsonify({"error": error}), 400
     with closing(get_db()) as conn:
         cur = conn.execute(
-            'INSERT INTO tests (title, description, created_by, source, created_at) '
-            'VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP);',
-            (test['title'], test['description'], session['user_id'], source)
+            'INSERT INTO tests (title, description, test_type, created_by, source, created_at) '
+            'VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP);',
+            (test['title'], test['description'], test['test_type'], session['user_id'], source)
         )
         _save_questions(conn, cur.lastrowid, test['questions'])
         conn.commit()
@@ -81,7 +81,7 @@ def list_tests():
         where = '' if role == 'admin' else 'WHERE t.created_by = ?'
         params = () if role == 'admin' else (session['user_id'],)
         rows = conn.execute(
-            '''SELECT t.id, t.title, t.description, t.source, t.created_at,
+            '''SELECT t.id, t.title, t.description, t.test_type, t.source, t.created_at,
                       (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions,
                       u.username AS author
                FROM tests t LEFT JOIN users u ON u.id = t.created_by
@@ -106,15 +106,30 @@ def get_test(test_id):
         if ownership_error:
             status = 404 if ownership_error == "Тест не найден" else 403
             return jsonify({"error": ownership_error}), status
-        test = conn.execute('SELECT id, title, description, source FROM tests WHERE id = ?;', (test_id,)).fetchone()
+        test = conn.execute(
+            'SELECT id, title, description, test_type, source FROM tests WHERE id = ?;',
+            (test_id,)
+        ).fetchone()
         rows = conn.execute(
-            'SELECT question_text, options, correct_answer FROM questions WHERE test_id = ? ORDER BY id;', (test_id,)
+            'SELECT question_type, question_text, options, matching_pairs, correct_answer '
+            'FROM questions WHERE test_id = ? ORDER BY id;', (test_id,)
         ).fetchall()
     result = dict(test)
-    result['questions'] = [
-        {"question_text": r['question_text'], "options": json.loads(r['options']), "correct_answer": r['correct_answer']}
-        for r in rows
-    ]
+    result['questions'] = []
+    for r in rows:
+        if r['question_type'] == 'matching':
+            result['questions'].append({
+                "question_type": "matching",
+                "question_text": r['question_text'],
+                "pairs": json.loads(r['matching_pairs'] or '[]'),
+            })
+        else:
+            result['questions'].append({
+                "question_type": "choice",
+                "question_text": r['question_text'],
+                "options": json.loads(r['options']),
+                "correct_answer": r['correct_answer'],
+            })
     return jsonify(result)
 
 
@@ -136,8 +151,8 @@ def update_test(test_id):
         if ownership_error:
             status = 404 if ownership_error == "Тест не найден" else 403
             return jsonify({"error": ownership_error}), status
-        conn.execute('UPDATE tests SET title = ?, description = ? WHERE id = ?;',
-                     (test['title'], test['description'], test_id))
+        conn.execute('UPDATE tests SET title = ?, description = ?, test_type = ? WHERE id = ?;',
+                     (test['title'], test['description'], test['test_type'], test_id))
         conn.execute('DELETE FROM questions WHERE test_id = ?;', (test_id,))
         _save_questions(conn, test_id, test['questions'])
         conn.commit()
@@ -196,6 +211,9 @@ def generate():
     topic = (data.get('topic') or '').strip() if isinstance(data.get('topic'), str) else ''
     difficulty = data.get('difficulty', 'medium')
     language = data.get('language', 'ru')
+    test_type = data.get('test_type', 'choice')
+    if test_type not in ('choice', 'matching'):
+        return jsonify({"error": "Неверный тип теста"}), 400
     try:
         count = int(data.get('count', 5))
         options = int(data.get('options', 4))
@@ -219,7 +237,7 @@ def generate():
     _last_generate[session['user_id']] = now
 
     try:
-        test = gemini.generate_test(topic, count, options, difficulty, language)
+        test = gemini.generate_test(topic, count, options, difficulty, language, test_type)
     except gemini.GeminiError as e:
         if e.status != 429:  # неудачный запрос не должен блокировать повторную попытку на 10 секунд
             _last_generate.pop(session['user_id'], None)

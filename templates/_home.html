@@ -4,6 +4,10 @@
         <p>Выберите тест, ответьте на вопросы и сразу узнайте результат.</p>
         <input id="search" class="search" type="search" placeholder="Поиск теста по названию...">
     </div>
+    <div class="tabs test-type-tabs">
+        <button type="button" class="tabs__btn is-active" data-home-test-type="choice">Обычные тесты</button>
+        <button type="button" class="tabs__btn" data-home-test-type="matching">На соответствие</button>
+    </div>
     <div id="tests-grid" class="grid">
         <div class="state-msg">Загрузка тестов...</div>
     </div>

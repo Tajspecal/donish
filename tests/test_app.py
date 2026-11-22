@@ -51,6 +51,22 @@ class FakeGemini(BaseHTTPRequestHandler):
             text = json.dumps({"title": "x", "description": "", "questions": [{"question_text": "q", "options": ["a"], "correct_answer": 0}]})
         elif mode == "wrong_options":
             text = json.dumps({**GOOD, "questions": [{"question_text": "q", "options": ["a", "b"], "correct_answer": 0}]})
+        elif mode == "matching":
+            text = json.dumps({
+                "title": "Сопоставление",
+                "description": "Тест на соответствие",
+                "questions": [
+                    {
+                        "question_type": "matching",
+                        "question_text": f"Сопоставьте {i}",
+                        "pairs": [
+                            {"left": "A", "right": "Буква"},
+                            {"left": "1", "right": "Число"},
+                        ],
+                    }
+                    for i in range(5)
+                ],
+            })
         else:
             text = json.dumps(GOOD)
         self._send(200, {"candidates": [{"content": {"parts": [{"text": text}]}}]})
@@ -173,6 +189,67 @@ class CrudTests(Base):
         self.a = client()
         login(self.a, "admin", "adminpass")
 
+    def test_matching_test_flow(self):
+        data = {
+            "title": "Соответствия",
+            "description": "Сопоставьте термины",
+            "questions": [{
+                "question_type": "matching",
+                "question_text": "Сопоставьте",
+                "pairs": [
+                    {"left": "Python", "right": "Язык"},
+                    {"left": "HTML", "right": "Разметка"},
+                    {"left": "SQL", "right": "База данных"},
+                ],
+            }],
+        }
+        r = self.a.post("/api/admin/tests", json=data)
+        self.assertEqual(r.status_code, 201)
+        tid = r.get_json()["id"]
+
+        s = client()
+        register(s, "stud_matching")
+        qs = s.get(f"/api/tests/{tid}/questions").get_json()
+        self.assertEqual(qs[0]["question_type"], "matching")
+        self.assertEqual(qs[0]["left_items"], ["Python", "HTML", "SQL"])
+        self.assertEqual(qs[0]["right_items"], ["Язык", "Разметка", "База данных"])
+
+        result = s.post("/api/submit", json={
+            "test_id": tid,
+            "answers": {str(qs[0]["id"]): {"0": 0, "1": 1, "2": 2}},
+        }).get_json()
+        self.assertEqual(result["score"], 100)
+
+        result = s.post("/api/submit", json={
+            "test_id": tid,
+            "answers": {str(qs[0]["id"]): {"0": 1, "1": 0, "2": 2}},
+        }).get_json()
+        self.assertEqual(result["score"], 33)
+
+    def test_choice_and_matching_tests_are_separate(self):
+        choice_tid = self.a.post("/api/admin/tests", json={
+            **GOOD,
+            "test_type": "choice",
+        }).get_json()["id"]
+        matching_tid = self.a.post("/api/admin/tests", json={
+            "test_type": "matching",
+            "title": "Отдельное соответствие",
+            "description": "Пары",
+            "questions": [{
+                "question_type": "matching",
+                "question_text": "Сопоставьте",
+                "pairs": [{"left": "A", "right": "Alpha"}, {"left": "B", "right": "Beta"}],
+            }],
+        }).get_json()["id"]
+
+        rows = self.a.get("/api/admin/tests").get_json()
+        choice_row = next(row for row in rows if row["id"] == choice_tid)
+        matching_row = next(row for row in rows if row["id"] == matching_tid)
+        self.assertEqual(choice_row["test_type"], "choice")
+        self.assertEqual(matching_row["test_type"], "matching")
+        self.assertEqual(self.a.get(f"/api/admin/tests/{choice_tid}").get_json()["test_type"], "choice")
+        self.assertEqual(self.a.get(f"/api/admin/tests/{matching_tid}").get_json()["test_type"], "matching")
+
     def test_teacher_can_only_manage_owned_tests_and_view_results(self):
         admin = self.a
 
@@ -284,6 +361,18 @@ class GenerateTests(Base):
 
     def n_tests(self):
         return len(self.a.get("/api/admin/tests").get_json())
+
+    def test_generate_matching_test(self):
+        FakeGemini.mode = "matching"
+        r = self.a.post("/api/admin/generate", json={
+            **self.PARAMS,
+            "test_type": "matching",
+            "options": 2,
+        })
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        self.assertEqual(data["questions"][0]["question_type"], "matching")
+        self.assertEqual(len(data["questions"][0]["pairs"]), 2)
 
     def test_success_returns_draft_and_does_not_save(self):
         before = self.n_tests()

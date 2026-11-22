@@ -47,20 +47,61 @@ DIFFICULTY = {"easy": "лёгкий (базовые понятия)", "medium": 
 LANGUAGE = {"ru": "русском", "en": "английском", "tj": "таджикском"}
 
 
-def build_prompt(topic, count, options, difficulty, language):
-    return (
+def build_prompt(topic, count, options, difficulty, language, test_type="choice"):
+    base = (
         f"Составь тест для студентов по теме «{topic}».\n"
-        f"Количество вопросов: {count}. У каждого вопроса ровно {options} вариантов ответа, "
-        f"и только один из них правильный. Уровень сложности: {DIFFICULTY[difficulty]}.\n"
-        f"Пиши на {LANGUAGE[language]} языке. Вопросы не должны повторяться, неправильные варианты должны быть "
-        f"правдоподобными, но однозначно неверными. В поле correct_answer укажи номер правильного варианта, "
-        f"начиная с нуля. В title дай короткое название теста (до 80 символов), в description — одно предложение."
+        f"Количество вопросов: {count}. Уровень сложности: {DIFFICULTY[difficulty]}.\n"
+        f"Пиши на {LANGUAGE[language]} языке. В title дай короткое название теста (до 80 символов), "
+        f"в description — одно предложение."
+    )
+    if test_type == "matching":
+        return (
+            base
+            + f" Это тест на соответствие. В каждом вопросе должно быть ровно {options} пар. "
+            + "Верни question_type: \"matching\" и поле pairs из объектов left/right."
+        )
+    return (
+        base
+        + f" У каждого вопроса ровно {options} вариантов ответа, и только один из них правильный. "
+        + "Верни question_type: \"choice\", поле options и номер correct_answer, начиная с нуля."
     )
 
 
-def _request_body(prompt):
+def _request_body(prompt, test_type="choice"):
     """Формат JSON-ответа для метода Gemini generateContent."""
-    config_part = {"responseMimeType": "application/json", "responseSchema": RESPONSE_SCHEMA}
+    schema = dict(RESPONSE_SCHEMA)
+    if test_type == "matching":
+        schema = {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question_type": {"type": "string"},
+                            "question_text": {"type": "string"},
+                            "pairs": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "left": {"type": "string"},
+                                        "right": {"type": "string"},
+                                    },
+                                    "required": ["left", "right"],
+                                },
+                            },
+                        },
+                        "required": ["question_type", "question_text", "pairs"],
+                    },
+                },
+            },
+            "required": ["title", "description", "questions"],
+        }
+    config_part = {"responseMimeType": "application/json", "responseSchema": schema}
     config_part["temperature"] = 0.7
     return {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": config_part}
 
@@ -84,12 +125,12 @@ def _http_error_detail(e):
         return ""
 
 
-def _call_api(prompt):
+def _call_api(prompt, test_type="choice"):
     if not config.GEMINI_API_KEY:
         raise GeminiError("Генерация не настроена: добавьте ключ GEMINI_API_KEY в файл .env и перезапустите сервер.", 503)
 
     try:
-        return _post(_request_body(prompt))
+        return _post(_request_body(prompt, test_type))
     except urllib.error.HTTPError as e:
         detail = getattr(e, "detail", None)
         if detail is None:
@@ -138,6 +179,13 @@ def validate_test(data, max_questions=None):
     if len(questions) > limit:
         return None, f"В тесте не может быть больше {limit} вопросов"
 
+    inferred_types = {q.get("question_type", "choice") if isinstance(q, dict) else None for q in questions}
+    if len(inferred_types) != 1:
+        return None, "В одном тесте могут быть только вопросы одного типа"
+    test_type = data.get("test_type") or next(iter(inferred_types))
+    if test_type not in ("choice", "matching"):
+        return None, "Неверный тип теста"
+
     clean = []
     for n, q in enumerate(questions, 1):
         if not isinstance(q, dict):
@@ -148,6 +196,8 @@ def validate_test(data, max_questions=None):
         question_type = q.get("question_type", "choice")
         if question_type not in ("choice", "matching"):
             return None, f"Вопрос {n}: неверный тип"
+        if test_type is not None and question_type != test_type:
+            return None, f"Вопрос {n}: тип не соответствует типу теста"
         if question_type == "matching":
             pairs = q.get("pairs")
             if not isinstance(pairs, list) or not (config.MIN_OPTIONS <= len(pairs) <= config.MAX_OPTIONS):
@@ -195,23 +245,25 @@ def validate_test(data, max_questions=None):
             "correct_answer": correct,
         })
 
-    return {"title": title.strip(), "description": description.strip(), "questions": clean}, None
+    return {"test_type": test_type, "title": title.strip(), "description": description.strip(), "questions": clean}, None
 
 
 def _shuffle_options(test):
     """Модели часто ставят правильный ответ на одно и то же место — перемешиваем варианты."""
     for q in test["questions"]:
+        if q["question_type"] == "matching":
+            continue
         right = q["options"][q["correct_answer"]]
         random.shuffle(q["options"])
         q["correct_answer"] = q["options"].index(right)
 
 
-def generate_test(topic, count, options, difficulty, language):
+def generate_test(topic, count, options, difficulty, language, test_type="choice"):
     """Возвращает проверенный черновик теста (в базу данных не записывается)."""
-    prompt = build_prompt(topic, count, options, difficulty, language)
+    prompt = build_prompt(topic, count, options, difficulty, language, test_type)
     last_error = "Ответ модели не соответствует формату"
     for _ in range(2):  # одна повторная попытка, если ответ не прошёл проверку
-        response = _call_api(prompt)
+        response = _call_api(prompt, test_type)
         try:
             data = _extract_json(response)
         except ValueError as e:
@@ -221,7 +273,11 @@ def generate_test(topic, count, options, difficulty, language):
         if error:
             last_error = error
             continue
-        if any(len(q["options"]) != options for q in test["questions"]):
+        if test_type == "matching":
+            if any(len(q["pairs"]) != options for q in test["questions"]):
+                last_error = "Число пар соответствия не совпадает с запрошенным"
+                continue
+        elif any(len(q["options"]) != options for q in test["questions"]):
             last_error = "Число вариантов ответа не совпадает с запрошенным"
             continue
         _shuffle_options(test)

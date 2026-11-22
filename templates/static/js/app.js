@@ -7,6 +7,7 @@ const state = {
     answers: {},     // { question_id: индекс_варианта }
     index: 0,
 };
+let homeTestType = 'choice';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -166,12 +167,13 @@ async function loadTests() {
 
 function renderTests(list) {
     const grid = $('#tests-grid');
-    if (!list.length) {
+    const filtered = list.filter((t) => (t.test_type || 'choice') === homeTestType);
+    if (!filtered.length) {
         grid.innerHTML = '<div class="state-msg">Тесты не найдены.</div>';
         return;
     }
     grid.innerHTML = '';
-    list.forEach((t) => {
+    filtered.forEach((t) => {
         const card = document.createElement('div');
         card.className = 'card test-card';
         card.innerHTML = `
@@ -187,6 +189,16 @@ function renderTests(list) {
 $('#search').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
     renderTests(state.tests.filter((t) => t.title.toLowerCase().includes(q)));
+});
+
+$$('[data-home-test-type]').forEach((tab) => {
+    tab.onclick = () => {
+        homeTestType = tab.dataset.homeTestType;
+        $$('[data-home-test-type]').forEach((b) =>
+            b.classList.toggle('is-active', b === tab)
+        );
+        renderTests(state.tests);
+    };
 });
 
 // ===== Прохождение теста =====
@@ -221,23 +233,52 @@ function renderQuestion() {
 
     const box = $('#options');
     box.innerHTML = '';
-    q.options.forEach((opt, i) => {
-        const label = document.createElement('label');
-        label.className = 'option' + (state.answers[q.id] === i ? ' is-selected' : '');
-        label.innerHTML = `<input type="radio" name="opt"><span class="option__dot"></span><span>${escapeHtml(opt)}</span>`;
-        label.onclick = (e) => {
-            e.preventDefault();
-            state.answers[q.id] = i;
-            renderQuestion();
-        };
-        box.appendChild(label);
-    });
+    if (q.question_type === 'matching') {
+        box.className = 'matching-answer';
+        if (!state.answers[q.id]) state.answers[q.id] = {};
+        q.left_items.forEach((left, leftIndex) => {
+            const row = document.createElement('div');
+            row.className = 'matching-answer__row';
+            row.innerHTML = `
+                <span class="matching-answer__left">${escapeHtml(left)}</span>
+                <span class="matching-answer__arrow">→</span>
+                <select class="matching-answer__select">
+                    <option value="">Выберите соответствие</option>
+                    ${q.right_items.map((right, rightIndex) =>
+                        `<option value="${rightIndex}" ${state.answers[q.id][leftIndex] === rightIndex ? 'selected' : ''}>${escapeHtml(right)}</option>`
+                    ).join('')}
+                </select>`;
+            row.querySelector('select').onchange = (e) => {
+                state.answers[q.id][leftIndex] = e.target.value === '' ? undefined : Number(e.target.value);
+                renderQuestion();
+            };
+            box.appendChild(row);
+        });
+    } else {
+        box.className = 'options';
+        q.options.forEach((opt, i) => {
+            const label = document.createElement('label');
+            label.className = 'option' + (state.answers[q.id] === i ? ' is-selected' : '');
+            label.innerHTML = `<input type="radio" name="opt"><span class="option__dot"></span><span>${escapeHtml(opt)}</span>`;
+            label.onclick = (e) => {
+                e.preventDefault();
+                state.answers[q.id] = i;
+                renderQuestion();
+            };
+            box.appendChild(label);
+        });
+    }
 
     $('#btn-prev').disabled = state.index === 0;
     const isLast = state.index === total - 1;
     const btnNext = $('#btn-next');
     btnNext.textContent = isLast ? 'Завершить' : 'Далее';
-    btnNext.disabled = state.answers[q.id] === undefined;
+    if (q.question_type === 'matching') {
+        const mapping = state.answers[q.id] || {};
+        btnNext.disabled = q.left_items.some((_, i) => mapping[i] === undefined);
+    } else {
+        btnNext.disabled = state.answers[q.id] === undefined;
+    }
 }
 
 $('#btn-prev').onclick = () => {

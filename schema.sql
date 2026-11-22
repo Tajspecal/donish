@@ -20,6 +20,8 @@ CREATE TABLE tests (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT NOT NULL,
     description TEXT,
+    test_type   TEXT NOT NULL DEFAULT 'choice'
+                CHECK (test_type IN ('choice', 'matching')),
     created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
     source      TEXT NOT NULL DEFAULT 'manual'
                 CHECK (source IN ('manual', 'import', 'gemini')),

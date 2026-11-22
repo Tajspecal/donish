@@ -15,7 +15,9 @@ quiz_bp = Blueprint('quiz', __name__)
 @login_required
 def get_tests():
     with closing(get_db()) as conn:
-        rows = conn.execute('SELECT id, title, description FROM tests ORDER BY id;').fetchall()
+        rows = conn.execute(
+            'SELECT id, title, description, test_type FROM tests ORDER BY id;'
+        ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
@@ -25,13 +27,28 @@ def get_tests():
 def get_test_questions(test_id):
     with closing(get_db()) as conn:
         rows = conn.execute(
-            'SELECT id, question_text, options FROM questions WHERE test_id = ? ORDER BY id;',
+            'SELECT id, question_type, question_text, options, matching_pairs '
+            'FROM questions WHERE test_id = ? ORDER BY id;',
             (test_id,)
         ).fetchall()
-    questions = [
-        {"id": r['id'], "question_text": r['question_text'], "options": json.loads(r['options'])}
-        for r in rows
-    ]
+    questions = []
+    for r in rows:
+        if r['question_type'] == 'matching':
+            pairs = json.loads(r['matching_pairs'] or '[]')
+            questions.append({
+                "id": r['id'],
+                "question_type": "matching",
+                "question_text": r['question_text'],
+                "left_items": [pair["left"] for pair in pairs],
+                "right_items": [pair["right"] for pair in pairs],
+            })
+        else:
+            questions.append({
+                "id": r['id'],
+                "question_type": "choice",
+                "question_text": r['question_text'],
+                "options": json.loads(r['options']),
+            })
     return jsonify(questions)
 
 
@@ -46,13 +63,30 @@ def submit_test():
 
     with closing(get_db()) as conn:
         questions = conn.execute(
-            'SELECT id, correct_answer FROM questions WHERE test_id = ?;', (test_id,)
+            'SELECT id, question_type, options, correct_answer, matching_pairs '
+            'FROM questions WHERE test_id = ?;', (test_id,)
         ).fetchall()
         if not questions:
             return jsonify({"error": "Тест не найден"}), 404
 
-        total = len(questions)
-        right = sum(1 for q in questions if answers.get(str(q['id'])) == q['correct_answer'])
+        total = 0
+        right = 0
+        for q in questions:
+            answer = answers.get(str(q['id']))
+            if q['question_type'] == 'matching':
+                pairs = json.loads(q['matching_pairs'] or '[]')
+                right_items = [pair["right"] for pair in pairs]
+                total += len(pairs)
+                if isinstance(answer, dict):
+                    for left_index, pair in enumerate(pairs):
+                        selected = answer.get(str(left_index))
+                        if isinstance(selected, int) and 0 <= selected < len(right_items):
+                            if right_items[selected] == pair["right"]:
+                                right += 1
+            else:
+                total += 1
+                if answer == q['correct_answer']:
+                    right += 1
         score = round(right / total * 100)
 
         conn.execute(

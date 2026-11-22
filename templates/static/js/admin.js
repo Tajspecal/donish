@@ -7,6 +7,7 @@ window.Admin = (function () {
     const MAX_OPTIONS = 6;
 
     let tests = [];
+    let testType = 'choice';
     let draft = null; // { id, source, title, description, questions: [{question_text, options, correct_answer}] }
 
     // ---------- Вспомогательные ----------
@@ -30,6 +31,11 @@ window.Admin = (function () {
     }
 
     const emptyQuestion = () => ({ question_text: '', options: ['', ''], correct_answer: 0 });
+    const emptyMatchingQuestion = () => ({
+        question_type: 'matching',
+        question_text: '',
+        pairs: [{ left: '', right: '' }, { left: '', right: '' }],
+    });
 
     // ---------- Вкладки ----------
     function openTab(name) {
@@ -42,6 +48,15 @@ window.Admin = (function () {
     }
 
     $$('#admin-tabs .tabs__btn').forEach((b) => (b.onclick = () => openTab(b.dataset.adminTab)));
+    $$('#admin-tests [data-test-type]').forEach((b) => {
+        b.onclick = () => {
+            testType = b.dataset.testType;
+            $$('#admin-tests [data-test-type]').forEach((tab) =>
+                tab.classList.toggle('is-active', tab === b)
+            );
+            renderTests();
+        };
+    });
 
     function open() {
         openTab('tests');
@@ -62,7 +77,10 @@ window.Admin = (function () {
 
     function renderTests() {
         const q = $('#admin-search').value.trim().toLowerCase();
-        const list = tests.filter((t) => t.title.toLowerCase().includes(q));
+        const list = tests.filter((t) =>
+            (t.test_type || 'choice') === testType &&
+            t.title.toLowerCase().includes(q)
+        );
         const box = $('#admin-tests-list');
         if (!list.length) {
             box.innerHTML = '<div class="state-msg">Тесты не найдены.</div>';
@@ -146,9 +164,15 @@ window.Admin = (function () {
         if (!file) return;
         try {
             const data = JSON.parse(await file.text());
+            const importedType = data.test_type
+                || (Array.isArray(data.questions) && data.questions.length
+                    && data.questions.every((q) => q.question_type === 'matching')
+                    ? 'matching'
+                    : 'choice');
             openEditor({
                 id: null,
                 source: 'import',
+                test_type: importedType,
                 title: data.title || '',
                 description: data.description || '',
                 questions: Array.isArray(data.questions) ? data.questions : [],
@@ -178,6 +202,7 @@ window.Admin = (function () {
                 method: 'POST',
                 body: JSON.stringify({
                     topic: generator.topic.value,
+                    test_type: testType,
                     count: generator.count.value,
                     options: generator.options.value,
                     difficulty: generator.difficulty.value,
@@ -188,7 +213,7 @@ window.Admin = (function () {
             generator.hidden = true;
             const msg = 'Черновик создан Gemini и ещё не сохранён. Модель может ошибаться — проверьте вопросы и правильные ответы.'
                 + (r.data.warning ? ' ' + r.data.warning : '');
-            openEditor({ id: null, source: 'gemini', title: r.data.title, description: r.data.description,
+            openEditor({ id: null, source: 'gemini', test_type: testType, title: r.data.title, description: r.data.description,
                          questions: r.data.questions }, msg);
         } catch {
             notice('Нет связи с сервером');
@@ -200,15 +225,24 @@ window.Admin = (function () {
 
     // ---------- Редактор теста ----------
     function openEditor(d, infoText) {
+        testType = d.test_type || 'choice';
+        $$('#admin-tests [data-test-type]').forEach((tab) =>
+            tab.classList.toggle('is-active', tab.dataset.testType === testType)
+        );
         draft = {
             id: d.id,
             source: d.source,
+            test_type: d.test_type || 'choice',
             title: d.title,
             description: d.description,
             questions: d.questions.map((q) => ({
+                question_type: (d.test_type || 'choice') === 'matching' ? 'matching' : 'choice',
                 question_text: q.question_text ?? '',
                 options: Array.isArray(q.options) ? q.options.map(String) : ['', ''],
                 correct_answer: Number.isInteger(q.correct_answer) ? q.correct_answer : 0,
+                pairs: Array.isArray(q.pairs)
+                    ? q.pairs.map((pair) => ({ left: String(pair.left || ''), right: String(pair.right || '') }))
+                    : [{ left: '', right: '' }, { left: '', right: '' }],
             })),
         };
         if (!draft.questions.length) draft.questions.push(emptyQuestion());
@@ -229,7 +263,14 @@ window.Admin = (function () {
         openEditor(r.data);
     }
 
-    $('#btn-new-test').onclick = () => openEditor({ id: null, source: 'manual', title: '', description: '', questions: [] });
+    $('#btn-new-test').onclick = () => openEditor({
+        id: null,
+        source: 'manual',
+        test_type: testType,
+        title: '',
+        description: '',
+        questions: testType === 'matching' ? [emptyMatchingQuestion()] : [],
+    });
 
     function setEditorError(msg) {
         const box = $('#editor-error');
@@ -246,41 +287,89 @@ window.Admin = (function () {
             card.innerHTML = `
                 <div class="qcard__head">
                     <strong>Вопрос ${qi + 1}</strong>
-                    <button type="button" class="btn btn--danger btn--small" data-act="del-q">Удалить вопрос</button>
+                    <div class="qcard__head-actions">
+                        <select class="select qcard__type" title="Тип вопроса">
+                            <option value="choice">Один вариант</option>
+                            <option value="matching">На соответствие</option>
+                        </select>
+                        <button type="button" class="btn btn--danger btn--small" data-act="del-q">Удалить вопрос</button>
+                    </div>
                 </div>
                 <textarea class="qcard__text" rows="2" placeholder="Текст вопроса"></textarea>
-                <div class="qcard__hint muted small">Отметьте кружком правильный вариант ответа</div>
-                <div class="qcard__options"></div>
-                <button type="button" class="btn btn--secondary btn--small qcard__add" data-act="add-opt">+ Вариант</button>`;
+                <div class="qcard__content"></div>`;
             const text = card.querySelector('textarea');
             text.value = q.question_text;
             text.oninput = () => (q.question_text = text.value);
 
-            const optBox = card.querySelector('.qcard__options');
-            q.options.forEach((opt, oi) => {
-                const row = document.createElement('div');
-                row.className = 'opt';
-                row.innerHTML = `
-                    <input type="radio" name="correct-${qi}" title="Правильный ответ" ${q.correct_answer === oi ? 'checked' : ''}>
-                    <input type="text" class="opt__text" placeholder="Вариант ${oi + 1}">
-                    <button type="button" class="btn btn--ghost btn--small opt__del" title="Удалить вариант"
-                        ${q.options.length <= MIN_OPTIONS ? 'disabled' : ''}>✕</button>`;
-                const input = row.querySelector('.opt__text');
-                input.value = opt;
-                input.oninput = () => (q.options[oi] = input.value);
-                row.querySelector('input[type=radio]').onchange = () => (q.correct_answer = oi);
-                row.querySelector('.opt__del').onclick = () => {
-                    q.options.splice(oi, 1);
-                    if (q.correct_answer === oi) q.correct_answer = 0;
-                    else if (q.correct_answer > oi) q.correct_answer--;
-                    renderEditor();
-                };
-                optBox.appendChild(row);
-            });
+            const typeSelect = card.querySelector('.qcard__type');
+            typeSelect.value = q.question_type || 'choice';
+            typeSelect.disabled = true;
+            typeSelect.onchange = () => {
+                q.question_type = typeSelect.value;
+                if (q.question_type === 'matching' && !Array.isArray(q.pairs)) {
+                    q.pairs = [{ left: '', right: '' }, { left: '', right: '' }];
+                }
+                renderEditor();
+            };
 
-            const addOpt = card.querySelector('[data-act=add-opt]');
-            addOpt.disabled = q.options.length >= MAX_OPTIONS;
-            addOpt.onclick = () => { q.options.push(''); renderEditor(); };
+            const content = card.querySelector('.qcard__content');
+            if (q.question_type === 'matching') {
+                content.innerHTML = `<div class="qcard__hint muted small">Укажите пары элементов для сопоставления</div><div class="matching-editor"></div>
+                    <button type="button" class="btn btn--secondary btn--small matching-editor__add">+ Пара</button>`;
+                const pairsBox = content.querySelector('.matching-editor');
+                q.pairs.forEach((pair, pi) => {
+                    const row = document.createElement('div');
+                    row.className = 'matching-row';
+                    row.innerHTML = `
+                        <input type="text" class="matching-row__input" placeholder="Левый элемент">
+                        <span class="matching-row__arrow">→</span>
+                        <input type="text" class="matching-row__input" placeholder="Правый элемент">
+                        <button type="button" class="btn btn--ghost btn--small matching-row__del" title="Удалить пару">✕</button>`;
+                    const inputs = row.querySelectorAll('input');
+                    inputs[0].value = pair.left;
+                    inputs[1].value = pair.right;
+                    inputs[0].oninput = () => (pair.left = inputs[0].value);
+                    inputs[1].oninput = () => (pair.right = inputs[1].value);
+                    row.querySelector('.matching-row__del').onclick = () => {
+                        q.pairs.splice(pi, 1);
+                        if (q.pairs.length < MIN_OPTIONS) q.pairs.push({ left: '', right: '' });
+                        renderEditor();
+                    };
+                    pairsBox.appendChild(row);
+                });
+                const addPair = content.querySelector('.matching-editor__add');
+                addPair.disabled = q.pairs.length >= MAX_OPTIONS;
+                addPair.onclick = () => { q.pairs.push({ left: '', right: '' }); renderEditor(); };
+            } else {
+                content.innerHTML = `<div class="qcard__hint muted small">Отметьте кружком правильный вариант ответа</div>
+                    <div class="qcard__options"></div>
+                    <button type="button" class="btn btn--secondary btn--small qcard__add" data-act="add-opt">+ Вариант</button>`;
+                const optBox = content.querySelector('.qcard__options');
+                q.options.forEach((opt, oi) => {
+                    const row = document.createElement('div');
+                    row.className = 'opt';
+                    row.innerHTML = `
+                        <input type="radio" name="correct-${qi}" title="Правильный ответ" ${q.correct_answer === oi ? 'checked' : ''}>
+                        <input type="text" class="opt__text" placeholder="Вариант ${oi + 1}">
+                        <button type="button" class="btn btn--ghost btn--small opt__del" title="Удалить вариант"
+                            ${q.options.length <= MIN_OPTIONS ? 'disabled' : ''}>✕</button>`;
+                    const input = row.querySelector('.opt__text');
+                    input.value = opt;
+                    input.oninput = () => (q.options[oi] = input.value);
+                    row.querySelector('input[type=radio]').onchange = () => (q.correct_answer = oi);
+                    row.querySelector('.opt__del').onclick = () => {
+                        q.options.splice(oi, 1);
+                        if (q.correct_answer === oi) q.correct_answer = 0;
+                        else if (q.correct_answer > oi) q.correct_answer--;
+                        renderEditor();
+                    };
+                    optBox.appendChild(row);
+                });
+
+                const addOpt = content.querySelector('[data-act=add-opt]');
+                addOpt.disabled = q.options.length >= MAX_OPTIONS;
+                addOpt.onclick = () => { q.options.push(''); renderEditor(); };
+            }
             card.querySelector('[data-act=del-q]').onclick = () => {
                 draft.questions.splice(qi, 1);
                 if (!draft.questions.length) draft.questions.push(emptyQuestion());
@@ -309,6 +398,7 @@ window.Admin = (function () {
         draft.title = $('#editor-name').value;
         draft.description = $('#editor-desc').value;
         const payload = JSON.stringify({
+            test_type: draft.test_type,
             title: draft.title,
             description: draft.description,
             questions: draft.questions,
