@@ -1,0 +1,36 @@
+<section id="view-auth" class="view">
+    <div class="auth">
+        <div class="auth__brand">
+            <span class="logo__icon logo__icon--big">✓</span>
+            <h1>Дониш</h1>
+            <p class="muted">Платформа онлайн-тестирования студентов</p>
+        </div>
+        <div class="card auth__card">
+            <div class="tabs">
+                <button type="button" class="tabs__btn is-active" data-tab="login">Вход</button>
+                <button type="button" class="tabs__btn" data-tab="register">Регистрация</button>
+            </div>
+            <div id="auth-error" class="alert" hidden></div>
+            <form id="form-login" class="form" autocomplete="on">
+                <label class="field"><span>Логин</span>
+                    <input type="text" name="username" placeholder="Введите логин" autocomplete="username" required></label>
+                <label class="field"><span>Пароль</span>
+                    <input type="password" name="password" placeholder="Введите пароль" autocomplete="current-password" required></label>
+                <button type="submit" class="btn btn--primary btn--block">Войти</button>
+                <p class="auth__switch muted">Нет аккаунта? <a href="#" data-tab-link="register">Зарегистрироваться</a></p>
+            </form>
+            <form id="form-register" class="form" autocomplete="on" hidden>
+                <label class="field"><span>Логин</span>
+                    <input type="text" name="username" placeholder="Минимум 3 символа" autocomplete="username" minlength="3" maxlength="50" required></label>
+                <label class="field"><span>Email</span>
+                    <input type="email" name="email" placeholder="name@example.com" autocomplete="email" maxlength="100" required></label>
+                <label class="field"><span>Пароль</span>
+                    <input type="password" name="password" placeholder="Минимум 4 символа" autocomplete="new-password" minlength="4" required></label>
+                <label class="field"><span>Повторите пароль</span>
+                    <input type="password" name="password2" placeholder="Повторите пароль" autocomplete="new-password" minlength="4" required></label>
+                <button type="submit" class="btn btn--primary btn--block">Зарегистрироваться</button>
+                <p class="auth__switch muted">Уже есть аккаунт? <a href="#" data-tab-link="login">Войти</a></p>
+            </form>
+        </div>
+    </div>
+</section>

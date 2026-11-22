@@ -1,0 +1,25 @@
+<section id="view-editor" class="view" hidden>
+    <button class="btn btn--ghost" id="btn-editor-back">← К панели</button>
+    <h1 id="editor-title">Новый тест</h1>
+    <div id="editor-notice" class="alert alert--info" hidden></div>
+    <div id="editor-error" class="alert" hidden></div>
+
+    <div class="card">
+        <div class="form">
+            <label class="field"><span>Название теста</span>
+                <input type="text" id="editor-name" maxlength="200" placeholder="Название теста"></label>
+            <label class="field"><span>Описание</span>
+                <input type="text" id="editor-desc" placeholder="Коротко о чём тест"></label>
+        </div>
+    </div>
+
+    <div id="editor-questions"></div>
+
+    <div class="editor__bar">
+        <button class="btn btn--secondary" id="btn-add-question">+ Добавить вопрос</button>
+        <div>
+            <button class="btn btn--secondary" id="btn-editor-cancel">Отмена</button>
+            <button class="btn btn--primary" id="btn-editor-save">Сохранить тест</button>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,63 @@
+<section id="view-admin" class="view" hidden>
+    <div class="admin__head">
+        <h1>Панель преподавателя</h1>
+        <div class="tabs tabs--inline" id="admin-tabs">
+            <button type="button" class="tabs__btn is-active" data-admin-tab="tests">Тесты</button>
+            <button type="button" class="tabs__btn" data-admin-tab="users" id="tab-users" hidden>Пользователи</button>
+        </div>
+    </div>
+
+    <div id="admin-notice" class="alert" hidden></div>
+
+    <div id="admin-tests">
+        <div class="toolbar">
+            <input id="admin-search" class="search search--small" type="search" placeholder="Поиск теста по названию...">
+            <div class="toolbar__actions">
+                <button class="btn btn--primary" id="btn-new-test">+ Создать тест</button>
+                <button class="btn btn--secondary" id="btn-import-file">Загрузить из файла</button>
+                <button class="btn btn--accent" id="btn-open-generator">✨ Сгенерировать</button>
+                <input type="file" id="import-file" accept=".json,application/json" hidden>
+            </div>
+        </div>
+
+        <form id="generator" class="card generator" hidden>
+            <h3>Генерация теста с помощью Gemini</h3>
+            <p class="muted">Модель подготовит черновик. В базу он попадёт только после того, как вы проверите вопросы и нажмёте «Сохранить».</p>
+            <div class="generator__grid">
+                <label class="field generator__wide"><span>Тема</span>
+                    <input type="text" name="topic" placeholder="Например: Основы компьютерных сетей" minlength="3" maxlength="200" required></label>
+                <label class="field"><span>Число вопросов</span>
+                    <input type="number" name="count" value="5" min="1" max="20" required></label>
+                <label class="field"><span>Вариантов ответа</span>
+                    <input type="number" name="options" value="4" min="2" max="6" required></label>
+                <label class="field"><span>Сложность</span>
+                    <select name="difficulty">
+                        <option value="easy">Лёгкая</option>
+                        <option value="medium" selected>Средняя</option>
+                        <option value="hard">Сложная</option>
+                    </select></label>
+                <label class="field"><span>Язык вопросов</span>
+                    <select name="language">
+                        <option value="ru" selected>Русский</option>
+                        <option value="en">Английский</option>
+                        <option value="tj">Таджикский</option>
+                    </select></label>
+            </div>
+            <div class="generator__actions">
+                <button type="submit" class="btn btn--accent" id="btn-generate">Сгенерировать</button>
+                <button type="button" class="btn btn--secondary" id="btn-close-generator">Отмена</button>
+                <span id="generator-status" class="muted"></span>
+            </div>
+        </form>
+
+        <div class="card table-card">
+            <div id="admin-tests-list"></div>
+        </div>
+    </div>
+
+    <div id="admin-users" hidden>
+        <div class="card table-card">
+            <div id="admin-users-list"></div>
+        </div>
+    </div>
+</section>
