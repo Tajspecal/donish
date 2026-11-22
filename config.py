@@ -28,7 +28,7 @@ DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "donish.db"))
 SCHEMA_PATH = os.path.join(BASE_DIR, "schema.sql")
 
 # Ключ для подписи сессий (cookie). Для реального сайта замените на свою длинную случайную строку.
-SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-donish-secret-key")
+SECRET_KEY = os.environ.get("SECRET_KEY", "donish-talabu-buzurgi-omuz")
 
 # Первый администратор: создаётся при первом запуске, если в базе нет ни одного администратора.
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")

@@ -145,6 +145,38 @@ def validate_test(data, max_questions=None):
         text = q.get("question_text")
         if not isinstance(text, str) or not text.strip():
             return None, f"Вопрос {n}: текст вопроса пуст"
+        question_type = q.get("question_type", "choice")
+        if question_type not in ("choice", "matching"):
+            return None, f"Вопрос {n}: неверный тип"
+        if question_type == "matching":
+            pairs = q.get("pairs")
+            if not isinstance(pairs, list) or not (config.MIN_OPTIONS <= len(pairs) <= config.MAX_OPTIONS):
+                return None, f"Вопрос {n}: для соответствия нужно от {config.MIN_OPTIONS} до {config.MAX_OPTIONS} пар"
+            clean_pairs = []
+            left_values = []
+            right_values = []
+            for pair_n, pair in enumerate(pairs, 1):
+                if not isinstance(pair, dict):
+                    return None, f"Вопрос {n}: неверный формат пары {pair_n}"
+                left = pair.get("left")
+                right = pair.get("right")
+                if not isinstance(left, str) or not left.strip() or not isinstance(right, str) or not right.strip():
+                    return None, f"Вопрос {n}: элементы пары {pair_n} не заполнены"
+                left = left.strip()
+                right = right.strip()
+                if left in left_values:
+                    return None, f"Вопрос {n}: левые элементы повторяются"
+                if right in right_values:
+                    return None, f"Вопрос {n}: правые элементы повторяются"
+                left_values.append(left)
+                right_values.append(right)
+                clean_pairs.append({"left": left, "right": right})
+            clean.append({
+                "question_type": "matching",
+                "question_text": text.strip(),
+                "pairs": clean_pairs,
+            })
+            continue
         opts = q.get("options")
         if not isinstance(opts, list) or not (config.MIN_OPTIONS <= len(opts) <= config.MAX_OPTIONS):
             return None, f"Вопрос {n}: должно быть от {config.MIN_OPTIONS} до {config.MAX_OPTIONS} вариантов ответа"
@@ -156,7 +188,12 @@ def validate_test(data, max_questions=None):
         correct = q.get("correct_answer")
         if isinstance(correct, bool) or not isinstance(correct, int) or not (0 <= correct < len(opts)):
             return None, f"Вопрос {n}: номер правильного ответа указан неверно"
-        clean.append({"question_text": text.strip(), "options": opts, "correct_answer": correct})
+        clean.append({
+            "question_type": "choice",
+            "question_text": text.strip(),
+            "options": opts,
+            "correct_answer": correct,
+        })
 
     return {"title": title.strip(), "description": description.strip(), "questions": clean}, None
 

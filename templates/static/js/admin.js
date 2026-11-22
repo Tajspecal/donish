@@ -80,17 +80,53 @@ window.Admin = (function () {
                         <td data-label="Автор">${escapeHtml(t.author || '—')}</td>
                         <td data-label="Создан">${formatDate(t.created_at)}</td>
                         <td class="table__actions">
+                            <button class="btn btn--secondary btn--small" data-results="${t.id}">Результаты</button>
                             <button class="btn btn--secondary btn--small" data-edit="${t.id}">Изменить</button>
                             <button class="btn btn--danger btn--small" data-del="${t.id}">Удалить</button>
                         </td>
                     </tr>`).join('')}
                 </tbody>
             </table>`;
+        box.querySelectorAll('[data-results]').forEach((b) => (b.onclick = () => showResults(+b.dataset.results)));
         box.querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => editTest(+b.dataset.edit)));
         box.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => deleteTest(+b.dataset.del)));
     }
 
     $('#admin-search').addEventListener('input', renderTests);
+
+    async function showResults(id) {
+        const test = tests.find((x) => x.id === id);
+        const box = $('#admin-results');
+        const list = $('#admin-results-list');
+        $('#admin-results-title').textContent = `Результаты: ${test ? test.title : 'тест'}`;
+        box.hidden = false;
+        list.innerHTML = '<div class="state-msg">Загрузка...</div>';
+        box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const r = await call(`/api/admin/tests/${id}/results`);
+        if (!r.ok) {
+            list.innerHTML = `<div class="state-msg">${escapeHtml(r.data.error || 'Не удалось загрузить результаты')}</div>`;
+            return;
+        }
+        if (!r.data.length) {
+            list.innerHTML = '<div class="state-msg">Студенты этот тест ещё не проходили.</div>';
+            return;
+        }
+        list.innerHTML = `
+            <table class="table">
+                <thead><tr><th>Студент</th><th>Результат</th><th>Дата</th></tr></thead>
+                <tbody>${r.data.map((row) => `
+                    <tr>
+                        <td data-label="Студент"><strong>${escapeHtml(row.username)}</strong></td>
+                        <td data-label="Результат">${row.score}%</td>
+                        <td data-label="Дата">${formatDate(row.created_at)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+    }
+
+    $('#btn-close-results').onclick = () => {
+        $('#admin-results').hidden = true;
+    };
 
     async function deleteTest(id) {
         const t = tests.find((x) => x.id === id);

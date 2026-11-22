@@ -30,8 +30,11 @@ CREATE TABLE tests (
 CREATE TABLE questions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     test_id        INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+    question_type  TEXT NOT NULL DEFAULT 'choice'
+                   CHECK (question_type IN ('choice', 'matching')),
     question_text  TEXT NOT NULL,
     options        TEXT NOT NULL,
+    matching_pairs TEXT,
     correct_answer INTEGER NOT NULL
 );
 

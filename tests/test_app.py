@@ -173,6 +173,40 @@ class CrudTests(Base):
         self.a = client()
         login(self.a, "admin", "adminpass")
 
+    def test_teacher_can_only_manage_owned_tests_and_view_results(self):
+        admin = self.a
+
+        teacher_a = client()
+        uid_a = register(teacher_a, "teach_owned_a")["id"]
+        admin.put(f"/api/admin/users/{uid_a}/role", json={"role": "teacher"})
+
+        teacher_b = client()
+        uid_b = register(teacher_b, "teach_owned_b")["id"]
+        admin.put(f"/api/admin/users/{uid_b}/role", json={"role": "teacher"})
+
+        tid_a = teacher_a.post("/api/admin/tests", json=GOOD).get_json()["id"]
+        tid_b = teacher_b.post("/api/admin/tests", json=GOOD).get_json()["id"]
+
+        a_list = teacher_a.get("/api/admin/tests").get_json()
+        b_list = teacher_b.get("/api/admin/tests").get_json()
+        self.assertIn(tid_a, [t["id"] for t in a_list])
+        self.assertNotIn(tid_b, [t["id"] for t in a_list])
+        self.assertIn(tid_b, [t["id"] for t in b_list])
+        self.assertNotIn(tid_a, [t["id"] for t in b_list])
+
+        self.assertEqual(teacher_a.get(f"/api/admin/tests/{tid_b}").status_code, 403)
+        self.assertEqual(teacher_a.put(f"/api/admin/tests/{tid_b}", json=GOOD).status_code, 403)
+        self.assertEqual(teacher_a.delete(f"/api/admin/tests/{tid_b}").status_code, 403)
+        self.assertEqual(teacher_a.get(f"/api/admin/tests/{tid_b}/results").status_code, 403)
+
+        student = client()
+        register(student, "stud_results")
+        student.post("/api/submit", json={"test_id": tid_a, "answers": {}})
+        rows = teacher_a.get(f"/api/admin/tests/{tid_a}/results").get_json()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["username"], "stud_results")
+        self.assertIn("score", rows[0])
+
     def test_create_edit_delete(self):
         r = self.a.post("/api/admin/tests", json=GOOD)
         self.assertEqual(r.status_code, 201)

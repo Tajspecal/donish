@@ -17,10 +17,24 @@ _last_generate = {}  # { user_id: время последней генераци
 
 
 def _save_questions(conn, test_id, questions):
+    rows = []
+    for q in questions:
+        if q.get("question_type") == "matching":
+            pairs = q["pairs"]
+            rows.append((
+                test_id, "matching", q["question_text"], "[]",
+                json.dumps(pairs, ensure_ascii=False), -1
+            ))
+        else:
+            rows.append((
+                test_id, "choice", q["question_text"],
+                json.dumps(q["options"], ensure_ascii=False), "[]", q["correct_answer"]
+            ))
     conn.executemany(
-        'INSERT INTO questions (test_id, question_text, options, correct_answer) VALUES (?, ?, ?, ?);',
-        [(test_id, q['question_text'], json.dumps(q['options'], ensure_ascii=False), q['correct_answer'])
-         for q in questions]
+        'INSERT INTO questions '
+        '(test_id, question_type, question_text, options, matching_pairs, correct_answer) '
+        'VALUES (?, ?, ?, ?, ?, ?);',
+        rows
     )
 
 
@@ -41,16 +55,39 @@ def _create_test(data, source):
 
 # ---------- Тесты ----------
 
+def _staff_role(conn):
+    row = conn.execute('SELECT role FROM users WHERE id = ?;', (session['user_id'],)).fetchone()
+    return row['role'] if row else None
+
+
+def _owned_test(conn, test_id):
+    role = _staff_role(conn)
+    test = conn.execute(
+        'SELECT id, created_by FROM tests WHERE id = ?;',
+        (test_id,)
+    ).fetchone()
+    if not test:
+        return None, "Тест не найден"
+    if role != 'admin' and test['created_by'] != session['user_id']:
+        return None, "Вы можете работать только со своими тестами"
+    return test, None
+
+
 @admin_bp.route('/api/admin/tests', methods=['GET'])
 @role_required(*STAFF)
 def list_tests():
     with closing(get_db()) as conn:
+        role = _staff_role(conn)
+        where = '' if role == 'admin' else 'WHERE t.created_by = ?'
+        params = () if role == 'admin' else (session['user_id'],)
         rows = conn.execute(
             '''SELECT t.id, t.title, t.description, t.source, t.created_at,
                       (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions,
                       u.username AS author
                FROM tests t LEFT JOIN users u ON u.id = t.created_by
-               ORDER BY t.id DESC;'''
+               ''' + where + '''
+               ORDER BY t.id DESC;''',
+            params
         ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -65,9 +102,11 @@ def create_test():
 @role_required(*STAFF)
 def get_test(test_id):
     with closing(get_db()) as conn:
+        _, ownership_error = _owned_test(conn, test_id)
+        if ownership_error:
+            status = 404 if ownership_error == "Тест не найден" else 403
+            return jsonify({"error": ownership_error}), status
         test = conn.execute('SELECT id, title, description, source FROM tests WHERE id = ?;', (test_id,)).fetchone()
-        if not test:
-            return jsonify({"error": "Тест не найден"}), 404
         rows = conn.execute(
             'SELECT question_text, options, correct_answer FROM questions WHERE test_id = ? ORDER BY id;', (test_id,)
         ).fetchall()
@@ -82,12 +121,21 @@ def get_test(test_id):
 @admin_bp.route('/api/admin/tests/<int:test_id>', methods=['PUT'])
 @role_required(*STAFF)
 def update_test(test_id):
+    with closing(get_db()) as conn:
+        _, ownership_error = _owned_test(conn, test_id)
+        if ownership_error:
+            status = 404 if ownership_error == "Тест не найден" else 403
+            return jsonify({"error": ownership_error}), status
+        if not conn.execute('SELECT 1 FROM tests WHERE id = ?;', (test_id,)).fetchone():
+            return jsonify({"error": "Тест не найден"}), 404
     test, error = gemini.validate_test(request.json)
     if error:
         return jsonify({"error": error}), 400
     with closing(get_db()) as conn:
-        if not conn.execute('SELECT 1 FROM tests WHERE id = ?;', (test_id,)).fetchone():
-            return jsonify({"error": "Тест не найден"}), 404
+        _, ownership_error = _owned_test(conn, test_id)
+        if ownership_error:
+            status = 404 if ownership_error == "Тест не найден" else 403
+            return jsonify({"error": ownership_error}), status
         conn.execute('UPDATE tests SET title = ?, description = ? WHERE id = ?;',
                      (test['title'], test['description'], test_id))
         conn.execute('DELETE FROM questions WHERE test_id = ?;', (test_id,))
@@ -100,11 +148,35 @@ def update_test(test_id):
 @role_required(*STAFF)
 def delete_test(test_id):
     with closing(get_db()) as conn:
+        _, ownership_error = _owned_test(conn, test_id)
+        if ownership_error:
+            status = 404 if ownership_error == "Тест не найден" else 403
+            return jsonify({"error": ownership_error}), status
         cur = conn.execute('DELETE FROM tests WHERE id = ?;', (test_id,))  # вопросы и результаты удалятся каскадом
         conn.commit()
     if cur.rowcount == 0:
         return jsonify({"error": "Тест не найден"}), 404
     return jsonify({"status": "ok"})
+
+
+@admin_bp.route('/api/admin/tests/<int:test_id>/results', methods=['GET'])
+@role_required(*STAFF)
+def test_results(test_id):
+    with closing(get_db()) as conn:
+        _, ownership_error = _owned_test(conn, test_id)
+        if ownership_error:
+            status = 404 if ownership_error == "Тест не найден" else 403
+            return jsonify({"error": ownership_error}), status
+        rows = conn.execute(
+            '''SELECT r.id, u.username, r.score,
+                      strftime('%Y-%m-%dT%H:%M:%SZ', r.created_at) AS created_at
+               FROM results r
+               JOIN users u ON u.id = r.user_id
+               WHERE r.test_id = ?
+               ORDER BY r.created_at DESC, r.id DESC;''',
+            (test_id,)
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 # ---------- Импорт и генерация ----------

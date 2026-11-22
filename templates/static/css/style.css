@@ -210,6 +210,9 @@ h1, h2, h3 { margin: 0 0 10px; }
 .table tr:last-child td { border-bottom: none; }
 .table__actions { white-space: nowrap; text-align: right; }
 .small { font-size: 13px; }
+.results__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.results__head h3 { margin: 0; }
+.results__head .btn { margin: 0; }
 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #e8ebf5; color: var(--text); }
 .badge--gemini { background: #ede9fe; color: #6d28d9; }

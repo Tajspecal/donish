@@ -38,6 +38,11 @@ def init_db():
             conn.execute("ALTER TABLE tests ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';")
         if "created_at" not in cols:
             conn.execute("ALTER TABLE tests ADD COLUMN created_at TEXT;")
+        question_cols = _columns(conn, "questions")
+        if "question_type" not in question_cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN question_type TEXT NOT NULL DEFAULT 'choice';")
+        if "matching_pairs" not in question_cols:
+            conn.execute("ALTER TABLE questions ADD COLUMN matching_pairs TEXT;")
         conn.commit()
         _ensure_admin(conn)
 

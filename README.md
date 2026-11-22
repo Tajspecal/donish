@@ -25,6 +25,7 @@ python app.py
 |-------------------------------------------|:-------:|:-------------:|:-------------:|
 | Регистрация, вход, прохождение тестов     |   да    |      да       |      да       |
 | Создание/изменение/удаление тестов        |   нет   |      да       |      да       |
+Просмотр результатов своих тестов           |   нет   |      да       |      да       |
 | Импорт из файла, генерация через Gemini   |   нет   |      да       |      да       |
 | Пользователи: роли и удаление             |   нет   |      нет      |      да       |
 
@@ -92,6 +93,6 @@ python -m unittest discover -s tests -v
 `GET /api/tests`, `GET /api/tests/<id>/questions`, `POST /api/submit`, `GET /api/results`.
 
 Преподаватель и администратор: `GET|POST /api/admin/tests`, `GET|PUT|DELETE /api/admin/tests/<id>`,
-`POST /api/admin/import`, `POST /api/admin/generate`.
+`GET /api/admin/tests/<id>/results`, `POST /api/admin/import`, `POST /api/admin/generate`.
 
 Только администратор: `GET /api/admin/users`, `PUT /api/admin/users/<id>/role`, `DELETE /api/admin/users/<id>`.
