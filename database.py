@@ -19,7 +19,7 @@ def _columns(conn, table):
     return {row["name"] for row in conn.execute(f"PRAGMA table_info({table});")}
 
 
-# Если файла базы нет — создаём таблицы и тестовые данные из schema.sql.
+# Если файла базы нет — создаём пустые таблицы из schema.sql.
 # Если база уже есть, но создана старой версией — добавляем новые столбцы таблицы tests.
 # После этого проверяем, что в системе есть хотя бы один администратор.
 def init_db():
@@ -40,6 +40,8 @@ def init_db():
             conn.execute("ALTER TABLE tests ADD COLUMN created_at TEXT;")
         if "test_type" not in cols:
             conn.execute("ALTER TABLE tests ADD COLUMN test_type TEXT NOT NULL DEFAULT 'choice';")
+        if "duration_minutes" not in cols:
+            conn.execute("ALTER TABLE tests ADD COLUMN duration_minutes INTEGER;")
         questions_table_exists = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'questions';"
         ).fetchone()

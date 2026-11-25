@@ -175,6 +175,7 @@ window.Admin = (function () {
                 test_type: importedType,
                 title: data.title || '',
                 description: data.description || '',
+                duration_minutes: data.duration_minutes ?? null,
                 questions: Array.isArray(data.questions) ? data.questions : [],
             }, 'Файл загружен. Проверьте вопросы и нажмите «Сохранить тест».');
         } catch {
@@ -235,6 +236,7 @@ window.Admin = (function () {
             test_type: d.test_type || 'choice',
             title: d.title,
             description: d.description,
+            duration_minutes: d.duration_minutes ?? null,
             questions: d.questions.map((q) => ({
                 question_type: (d.test_type || 'choice') === 'matching' ? 'matching' : 'choice',
                 question_text: q.question_text ?? '',
@@ -249,6 +251,7 @@ window.Admin = (function () {
         $('#editor-title').textContent = d.id ? 'Редактирование теста' : d.source === 'manual' ? 'Новый тест' : 'Проверка черновика';
         $('#editor-name').value = draft.title;
         $('#editor-desc').value = draft.description;
+        $('#editor-duration').value = draft.duration_minutes ?? '';
         const info = $('#editor-notice');
         info.textContent = infoText || '';
         info.hidden = !infoText;
@@ -269,6 +272,7 @@ window.Admin = (function () {
         test_type: testType,
         title: '',
         description: '',
+        duration_minutes: null,
         questions: testType === 'matching' ? [emptyMatchingQuestion()] : [],
     });
 
@@ -397,10 +401,12 @@ window.Admin = (function () {
     $('#btn-editor-save').onclick = async () => {
         draft.title = $('#editor-name').value;
         draft.description = $('#editor-desc').value;
+        const durationValue = $('#editor-duration').value.trim();
         const payload = JSON.stringify({
             test_type: draft.test_type,
             title: draft.title,
             description: draft.description,
+            duration_minutes: durationValue ? Number(durationValue) : null,
             questions: draft.questions,
             source: draft.source,
         });

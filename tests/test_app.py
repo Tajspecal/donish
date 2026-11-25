@@ -304,6 +304,34 @@ class CrudTests(Base):
         self.assertEqual(self.a.get(f"/api/admin/tests/{tid}").status_code, 404)
         self.assertEqual(self.a.delete(f"/api/admin/tests/{tid}").status_code, 404)
 
+    def test_test_duration_is_optional_and_saved(self):
+        created = self.a.post("/api/admin/tests", json={**GOOD, "duration_minutes": 15})
+        self.assertEqual(created.status_code, 201)
+        tid = created.get_json()["id"]
+
+        self.assertEqual(self.a.get(f"/api/admin/tests/{tid}").get_json()["duration_minutes"], 15)
+        self.assertEqual(
+            next(test for test in self.a.get("/api/admin/tests").get_json() if test["id"] == tid)["duration_minutes"],
+            15,
+        )
+        student = client()
+        register(student, "stud_timer")
+        student_tests = student.get("/api/tests").get_json()
+        test = next(test for test in student_tests if test["id"] == tid)
+        self.assertEqual(test["duration_minutes"], 15)
+        self.assertEqual(test["author"], "admin")
+
+        self.assertEqual(
+            self.a.put(f"/api/admin/tests/{tid}", json={**GOOD, "duration_minutes": None}).status_code,
+            200,
+        )
+        self.assertIsNone(self.a.get(f"/api/admin/tests/{tid}").get_json()["duration_minutes"])
+
+    def test_test_duration_validation(self):
+        for duration in (0, 601, 1.5, True, "15"):
+            response = self.a.post("/api/admin/tests", json={**GOOD, "duration_minutes": duration})
+            self.assertEqual(response.status_code, 400, repr(duration))
+
     def test_validation(self):
         bad = [
             {**GOOD, "title": "  "},
@@ -463,6 +491,20 @@ class GenerateTests(Base):
 
 
 class MigrationTests(unittest.TestCase):
+    def test_fresh_database_has_no_seed_tests(self):
+        import database
+        path = os.path.join(_tmp, "fresh.db")
+        old = config.DB_PATH
+        config.DB_PATH = path
+        try:
+            database.init_db()
+            conn = database.get_db()
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM tests").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM questions").fetchone()[0], 0)
+            conn.close()
+        finally:
+            config.DB_PATH = old
+
     def test_old_database_gets_new_columns(self):
         import sqlite3
         import database
@@ -481,7 +523,7 @@ class MigrationTests(unittest.TestCase):
             database.init_db()
             conn = database.get_db()
             cols = {r["name"] for r in conn.execute("PRAGMA table_info(tests)")}
-            self.assertTrue({"created_by", "source", "created_at"} <= cols)
+            self.assertTrue({"created_by", "source", "created_at", "duration_minutes"} <= cols)
             self.assertEqual(conn.execute("SELECT source FROM tests").fetchone()[0], "manual")
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0], 1)
             conn.close()

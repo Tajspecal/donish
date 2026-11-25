@@ -6,8 +6,10 @@ const state = {
     questions: [],
     answers: {},     // { question_id: индекс_варианта }
     index: 0,
+    quizTimer: null,
+    quizDeadline: null,
+    isSubmitting: false,
 };
-let homeTestType = 'choice';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -167,7 +169,8 @@ async function loadTests() {
 
 function renderTests(list) {
     const grid = $('#tests-grid');
-    const filtered = list.filter((t) => (t.test_type || 'choice') === homeTestType);
+    const query = $('#search').value.trim().toLowerCase();
+    const filtered = list.filter((t) => t.title.toLowerCase().includes(query));
     if (!filtered.length) {
         grid.innerHTML = '<div class="state-msg">Тесты не найдены.</div>';
         return;
@@ -177,28 +180,24 @@ function renderTests(list) {
         const card = document.createElement('div');
         card.className = 'card test-card';
         card.innerHTML = `
-            <div class="test-card__badge">📝</div>
+            <div class="test-card__top">
+                <div class="test-card__badge" aria-hidden="true">📝</div>
+                <span class="test-card__type">${(t.test_type || 'choice') === 'matching' ? 'На соответствие' : 'С выбором ответа'}</span>
+            </div>
             <h3>${escapeHtml(t.title)}</h3>
-            <p>${escapeHtml(t.description || 'Описание отсутствует')}</p>
-            <button class="btn btn--primary">Пройти тест</button>`;
+            <div class="test-card__details">
+                <span class="test-card__duration">${t.duration_minutes ? `⏱ ${t.duration_minutes} мин` : 'Без ограничения времени'}</span>
+                <span class="test-card__author">Автор: ${escapeHtml(t.author || 'Не указан')}</span>
+            </div>
+            <p class="test-card__description">${escapeHtml(t.description || 'Описание отсутствует')}</p>
+            <button class="btn btn--primary test-card__action"><span>Пройти тест</span><span aria-hidden="true">→</span></button>`;
         card.querySelector('button').onclick = () => startTest(t);
         grid.appendChild(card);
     });
 }
 
 $('#search').addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    renderTests(state.tests.filter((t) => t.title.toLowerCase().includes(q)));
-});
-
-$$('[data-home-test-type]').forEach((tab) => {
-    tab.onclick = () => {
-        homeTestType = tab.dataset.homeTestType;
-        $$('[data-home-test-type]').forEach((b) =>
-            b.classList.toggle('is-active', b === tab)
-        );
-        renderTests(state.tests);
-    };
+    renderTests(state.tests);
 });
 
 // ===== Прохождение теста =====
@@ -215,12 +214,52 @@ async function startTest(test) {
         state.questions = questions;
         state.answers = {};
         state.index = 0;
+        state.isSubmitting = false;
         $('#quiz-title').textContent = test.title;
         showView('quiz');
+        startQuizTimer(test.duration_minutes);
         renderQuestion();
     } catch {
         alert('Не удалось загрузить вопросы.');
     }
+}
+
+function stopQuizTimer() {
+    if (state.quizTimer) clearInterval(state.quizTimer);
+    state.quizTimer = null;
+    state.quizDeadline = null;
+    $('#quiz-timer').hidden = true;
+}
+
+function startQuizTimer(durationMinutes) {
+    stopQuizTimer();
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 1) return;
+    const timer = $('#quiz-timer');
+    timer.innerHTML = `
+        <span class="quiz__timer-icon" aria-hidden="true">⏱</span>
+        <span>Осталось</span>
+        <span class="quiz__timer-value"></span>`;
+    const timerValue = timer.querySelector('.quiz__timer-value');
+    timer.hidden = false;
+    timer.classList.remove('is-urgent');
+    state.quizDeadline = Date.now() + durationMinutes * 60 * 1000;
+    const update = () => {
+        const remaining = Math.max(0, Math.ceil((state.quizDeadline - Date.now()) / 1000));
+        const minutes = Math.floor(remaining / 60);
+        const seconds = remaining % 60;
+        timerValue.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+        timerValue.classList.remove('is-ticking');
+        void timerValue.offsetWidth;
+        timerValue.classList.add('is-ticking');
+        timer.classList.toggle('is-urgent', remaining <= 60);
+        if (remaining === 0) {
+            clearInterval(state.quizTimer);
+            state.quizTimer = null;
+            finishTest();
+        }
+    };
+    update();
+    state.quizTimer = setInterval(update, 1000);
 }
 
 function renderQuestion() {
@@ -298,10 +337,16 @@ $('#btn-next').onclick = () => {
 };
 
 $('#btn-exit').onclick = () => {
-    if (confirm('Выйти из теста? Ответы не сохранятся.')) showView('home');
+    if (confirm('Выйти из теста? Ответы не сохранятся.')) {
+        stopQuizTimer();
+        showView('home');
+    }
 };
 
 async function finishTest() {
+    if (state.isSubmitting) return;
+    state.isSubmitting = true;
+    stopQuizTimer();
     const btn = $('#btn-next');
     btn.disabled = true;
     try {
@@ -319,6 +364,7 @@ async function finishTest() {
         showView('result');
     } catch {
         alert('Не удалось сохранить результат. Попробуйте ещё раз.');
+        state.isSubmitting = false;
         btn.disabled = false;
     }
 }

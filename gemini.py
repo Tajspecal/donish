@@ -185,6 +185,11 @@ def validate_test(data, max_questions=None):
     test_type = data.get("test_type") or next(iter(inferred_types))
     if test_type not in ("choice", "matching"):
         return None, "Неверный тип теста"
+    duration = data.get("duration_minutes")
+    if duration is not None and (
+        isinstance(duration, bool) or not isinstance(duration, int) or not (1 <= duration <= 600)
+    ):
+        return None, "Время теста должно быть от 1 до 600 минут или не задано"
 
     clean = []
     for n, q in enumerate(questions, 1):
@@ -245,7 +250,13 @@ def validate_test(data, max_questions=None):
             "correct_answer": correct,
         })
 
-    return {"test_type": test_type, "title": title.strip(), "description": description.strip(), "questions": clean}, None
+    return {
+        "test_type": test_type,
+        "title": title.strip(),
+        "description": description.strip(),
+        "duration_minutes": duration,
+        "questions": clean,
+    }, None
 
 
 def _shuffle_options(test):

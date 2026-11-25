@@ -16,7 +16,11 @@ quiz_bp = Blueprint('quiz', __name__)
 def get_tests():
     with closing(get_db()) as conn:
         rows = conn.execute(
-            'SELECT id, title, description, test_type FROM tests ORDER BY id;'
+            '''SELECT t.id, t.title, t.description, t.test_type, t.duration_minutes,
+                      u.username AS author
+               FROM tests t
+               LEFT JOIN users u ON u.id = t.created_by
+               ORDER BY t.id;'''
         ).fetchall()
     return jsonify([dict(r) for r in rows])
 

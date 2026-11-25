@@ -44,9 +44,10 @@ def _create_test(data, source):
         return jsonify({"error": error}), 400
     with closing(get_db()) as conn:
         cur = conn.execute(
-            'INSERT INTO tests (title, description, test_type, created_by, source, created_at) '
-            'VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP);',
-            (test['title'], test['description'], test['test_type'], session['user_id'], source)
+            'INSERT INTO tests (title, description, test_type, duration_minutes, created_by, source, created_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);',
+            (test['title'], test['description'], test['test_type'], test['duration_minutes'],
+             session['user_id'], source)
         )
         _save_questions(conn, cur.lastrowid, test['questions'])
         conn.commit()
@@ -81,7 +82,7 @@ def list_tests():
         where = '' if role == 'admin' else 'WHERE t.created_by = ?'
         params = () if role == 'admin' else (session['user_id'],)
         rows = conn.execute(
-            '''SELECT t.id, t.title, t.description, t.test_type, t.source, t.created_at,
+            '''SELECT t.id, t.title, t.description, t.test_type, t.duration_minutes, t.source, t.created_at,
                       (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions,
                       u.username AS author
                FROM tests t LEFT JOIN users u ON u.id = t.created_by
@@ -107,7 +108,7 @@ def get_test(test_id):
             status = 404 if ownership_error == "Тест не найден" else 403
             return jsonify({"error": ownership_error}), status
         test = conn.execute(
-            'SELECT id, title, description, test_type, source FROM tests WHERE id = ?;',
+            'SELECT id, title, description, test_type, duration_minutes, source FROM tests WHERE id = ?;',
             (test_id,)
         ).fetchone()
         rows = conn.execute(
@@ -151,8 +152,10 @@ def update_test(test_id):
         if ownership_error:
             status = 404 if ownership_error == "Тест не найден" else 403
             return jsonify({"error": ownership_error}), status
-        conn.execute('UPDATE tests SET title = ?, description = ?, test_type = ? WHERE id = ?;',
-                     (test['title'], test['description'], test['test_type'], test_id))
+        conn.execute(
+            'UPDATE tests SET title = ?, description = ?, test_type = ?, duration_minutes = ? WHERE id = ?;',
+            (test['title'], test['description'], test['test_type'], test['duration_minutes'], test_id)
+        )
         conn.execute('DELETE FROM questions WHERE test_id = ?;', (test_id,))
         _save_questions(conn, test_id, test['questions'])
         conn.commit()
