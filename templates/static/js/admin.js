@@ -79,7 +79,7 @@ window.Admin = (function () {
         const q = $('#admin-search').value.trim().toLowerCase();
         const list = tests.filter((t) =>
             (t.test_type || 'choice') === testType &&
-            t.title.toLowerCase().includes(q)
+            (t.title.toLowerCase().includes(q) || (t.author || '').toLowerCase().includes(q))
         );
         const box = $('#admin-tests-list');
         if (!list.length) {
@@ -91,8 +91,7 @@ window.Admin = (function () {
                 <thead><tr><th>Название</th><th>Вопросов</th><th>Источник</th><th>Автор</th><th>Создан</th><th></th></tr></thead>
                 <tbody>${list.map((t) => `
                     <tr>
-                        <td data-label="Название"><strong>${escapeHtml(t.title)}</strong>
-                            <div class="muted small">${escapeHtml(t.description || '')}</div></td>
+                        <td data-label="Название"><strong>${escapeHtml(t.title)}</strong></td>
                         <td data-label="Вопросов">${t.questions}</td>
                         <td data-label="Источник"><span class="badge badge--${t.source}">${SOURCES[t.source] || t.source}</span></td>
                         <td data-label="Автор">${escapeHtml(t.author || '—')}</td>

@@ -9,6 +9,7 @@ import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -30,7 +31,7 @@ GOOD = {
 
 
 class FakeGemini(BaseHTTPRequestHandler):
-    mode = "ok"      # ok | 429 | disconnect | bad_json | bad_format | wrong_options
+    mode = "ok"      # ok | 429 | 503 | 503_then_ok | disconnect | bad_json | bad_format | wrong_options
     calls = []
 
     def log_message(self, *a):
@@ -42,6 +43,8 @@ class FakeGemini(BaseHTTPRequestHandler):
         mode = FakeGemini.mode
         if mode == "429":
             return self._send(429, {"error": {"message": "quota"}})
+        if mode == "503" or (mode == "503_then_ok" and len(FakeGemini.calls) == 1):
+            return self._send(503, {"error": {"message": "high demand"}})
         if mode == "disconnect":
             self.connection.close()
             return
@@ -427,6 +430,21 @@ class GenerateTests(Base):
         r = self.a.post("/api/admin/generate", json=self.PARAMS)
         self.assertEqual(r.status_code, 429)
         self.assertIn("Лимит", r.get_json()["error"])
+
+    def test_temporary_service_unavailable_is_retried(self):
+        FakeGemini.mode = "503_then_ok"
+        with patch("gemini.time.sleep"):
+            r = self.a.post("/api/admin/generate", json=self.PARAMS)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(FakeGemini.calls), 2)
+
+    def test_persistent_service_unavailable_returns_503(self):
+        FakeGemini.mode = "503"
+        with patch("gemini.time.sleep"):
+            r = self.a.post("/api/admin/generate", json=self.PARAMS)
+        self.assertEqual(r.status_code, 503)
+        self.assertIn("перегружен", r.get_json()["error"])
+        self.assertEqual(len(FakeGemini.calls), 2)
 
     def test_disconnected_service_returns_gateway_error(self):
         FakeGemini.mode = "disconnect"

@@ -6,6 +6,7 @@
 import json
 import random
 import socket
+import time
 import urllib.error
 import urllib.request
 
@@ -45,6 +46,8 @@ RESPONSE_SCHEMA = {
 
 DIFFICULTY = {"easy": "лёгкий (базовые понятия)", "medium": "средний", "hard": "сложный (требует понимания, а не заучивания)"}
 LANGUAGE = {"ru": "русском", "en": "английском", "tj": "таджикском"}
+TRANSIENT_HTTP_STATUSES = (500, 502, 503, 504)
+RETRY_DELAY_SECONDS = 1
 
 
 def build_prompt(topic, count, options, difficulty, language, test_type="choice"):
@@ -129,26 +132,33 @@ def _call_api(prompt, test_type="choice"):
     if not config.GEMINI_API_KEY:
         raise GeminiError("Генерация не настроена: добавьте ключ GEMINI_API_KEY в файл .env и перезапустите сервер.", 503)
 
-    try:
-        return _post(_request_body(prompt, test_type))
-    except urllib.error.HTTPError as e:
-        detail = getattr(e, "detail", None)
-        if detail is None:
-            detail = _http_error_detail(e)
-        print(f"[Gemini] HTTP {e.code}: {detail}")  # подробности — только в консоль сервера
-        if e.code == 429:
-            raise GeminiError("Лимит запросов бесплатного уровня исчерпан. Подождите и повторите позже.", 429)
-        if e.code in (400, 401, 403, 404):
-            raise GeminiError("Gemini отклонил запрос: проверьте ключ GEMINI_API_KEY и название модели (см. консоль сервера).", 502)
-        raise GeminiError("Сервис Gemini временно недоступен. Повторите попытку позже.", 502)
-    except (socket.timeout, TimeoutError):
-        raise GeminiError("Gemini не ответил вовремя. Повторите попытку.", 504)
-    except ConnectionError as e:
-        print(f"[Gemini] соединение прервано: {e}")
-        raise GeminiError("Нет связи с сервисом Gemini. Проверьте интернет.", 502)
-    except urllib.error.URLError as e:
-        print(f"[Gemini] нет связи: {e.reason}")
-        raise GeminiError("Нет связи с сервисом Gemini. Проверьте интернет.", 502)
+    for attempt in range(2):
+        try:
+            return _post(_request_body(prompt, test_type))
+        except urllib.error.HTTPError as e:
+            detail = getattr(e, "detail", None)
+            if detail is None:
+                detail = _http_error_detail(e)
+            e.close()
+            print(f"[Gemini] HTTP {e.code}: {detail}")  # подробности — только в консоль сервера
+            if e.code == 429:
+                raise GeminiError("Лимит запросов бесплатного уровня исчерпан. Подождите и повторите позже.", 429)
+            if e.code in (400, 401, 403, 404):
+                raise GeminiError("Gemini отклонил запрос: проверьте ключ GEMINI_API_KEY и название модели (см. консоль сервера).", 502)
+            if e.code in TRANSIENT_HTTP_STATUSES and attempt == 0:
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+            if e.code == 503:
+                raise GeminiError("Gemini временно перегружен. Повторите попытку позже.", 503)
+            raise GeminiError("Сервис Gemini временно недоступен. Повторите попытку позже.", 502)
+        except (socket.timeout, TimeoutError):
+            raise GeminiError("Gemini не ответил вовремя. Повторите попытку.", 504)
+        except ConnectionError as e:
+            print(f"[Gemini] соединение прервано: {e}")
+            raise GeminiError("Нет связи с сервисом Gemini. Проверьте интернет.", 502)
+        except urllib.error.URLError as e:
+            print(f"[Gemini] нет связи: {e.reason}")
+            raise GeminiError("Нет связи с сервисом Gemini. Проверьте интернет.", 502)
 
 
 def _extract_json(response):

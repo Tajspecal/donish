@@ -45,6 +45,6 @@ GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "45"))
 GENERATE_PAUSE = int(os.environ.get("GENERATE_PAUSE", "10"))
 
 # Ограничения на тест
-MAX_QUESTIONS = 20
+MAX_QUESTIONS = 25
 MIN_OPTIONS = 2
 MAX_OPTIONS = 6
